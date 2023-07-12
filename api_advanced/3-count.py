@@ -1,44 +1,51 @@
 #!/usr/bin/python3
-"""
-Function that queries the Reddit API and prints
-the top ten hot posts of a subreddit
-"""
+"""count it"""
+
+import json
 import requests
-import sys
 
 
-def add_title(hot_list, hot_posts):
-    if len(hot_posts) == 0:
-        return
-    hot_list.append(hot_posts[0]['data']['title'])
-    hot_posts.pop(0)
-    add_title(hot_list, hot_posts)
+def count_words(subreddit, word_list, after='', hot_list=[]):
+    """Function that queries the Reddit API."""
+    if after == '':
+        hot_list = [0] * len(word_list)
+    url = "https://www.reddit.com/r/{}/hot.json" \
+        .format(subreddit)
+    request = requests.get(url, params={'after': after},
+                           allow_redirects=False,
+                           headers={'User-Agent': 'My API advanced 1.0'})
+    if request.status_code == 200:
+        data = request.json()
 
+        for topic in (data['data']['children']):
+            for word in topic['data']['title'].split():
+                for i in range(len(word_list)):
+                    if word_list[i].lower() == word.lower():
+                        hot_list[i] += 1
 
-def recurse(subreddit, hot_list=[], after=None):
-    agent = 'Mozilla/5.0'
-    headers = {
-        'User-Agent': agent
-    }
+        after = data['data']['after']
+        if after is None:
+            save = []
+            for i in range(len(word_list)):
+                for j in range(i + 1, len(word_list)):
+                    if word_list[i].lower() == word_list[j].lower():
+                        save.append(j)
+                        hot_list[i] += hot_list[j]
 
-    params = {
-        'after': after
-    }
+            for i in range(len(word_list)):
+                for j in range(i, len(word_list)):
+                    if (hot_list[j] > hot_list[i] or
+                            (word_list[i] > word_list[j] and
+                             hot_list[j] == hot_list[i])):
+                        a = hot_list[i]
+                        hot_list[i] = hot_list[j]
+                        hot_list[j] = a
+                        a = word_list[i]
+                        word_list[i] = word_list[j]
+                        word_list[j] = a
 
-    url = "https://www.reddit.com/r/{}/hot.json".format(subreddit)
-    response = requests.get(url,
-                            headers=headers,
-                            params=params,
-                            allow_redirects=False)
-
-    if response.status_code != 200:
-        return None
-
-    reddit = response.json()
-    hot_posts = reddit['data']['children']
-    add_title(hot_list, hot_posts)
-    after = reddit['data']['after']
-    if not after:
-        return hot_list
-    else:
-        return recurse(subreddit, hot_list=hot_list, after=after)
+            for i in range(len(word_list)):
+                if (hot_list[i] > 0) and i not in save:
+                    print("{}: {}".format(word_list[i].lower(), hot_list[i]))
+        else:
+            count_words(subreddit, word_list, after, hot_list)
